@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	zipper "github.com/esafirm/appdiff/zipper"
+	zipper "github.com/bukalapak/appdiff/zipper"
 )
 
 const (

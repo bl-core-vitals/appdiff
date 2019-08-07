@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	zipper "github.com/esafirm/appdiff/zipper"
+	"github.com/atotto/clipboard"
+
+	"github.com/esafirm/appdiff/zipper"
 )
 
 const (
@@ -48,23 +51,47 @@ func main() {
 		return
 	}
 
-	for _, f := range files {
+	allData := make([]string, len(files))
+
+	fmt.Println("Comparing files…")
+
+	for index, f := range files {
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondFileInfo, err = os.Stat(secondDirFileName)
+		var secondSize = secondFileInfo.Size()
+
+		var name = f.Name()
+		var firstSize = f.Size()
+
+		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
 
 		if err != nil {
-			fmt.Printf(NewFile, f.Name())
+			fmt.Printf(NewFile, name)
 			continue
 		}
 
-		if f.Size() > secondFileInfo.Size() {
-			fmt.Printf(Increase, f.Name(), f.Size(), secondFileInfo.Size())
-		} else if f.Size() < secondFileInfo.Size() {
-			fmt.Printf(Decrease, f.Name(), f.Size(), secondFileInfo.Size())
+		if firstSize > secondSize {
+			fmt.Printf(Increase, name, firstSize, secondSize)
+		} else if firstSize < secondSize {
+			fmt.Printf(Decrease, name, firstSize, secondSize)
 		} else {
-			fmt.Printf(Same, f.Name(), f.Size(), secondFileInfo.Size())
+			fmt.Printf(Same, name, firstSize, secondSize)
 		}
 	}
+
+	copyToClipboard(allData)
+}
+
+func copyToClipboard(allData []string) {
+	var buffer bytes.Buffer
+
+	for _, data := range allData {
+		buffer.WriteString(data)
+	}
+
+	clipboard.WriteAll(buffer.String())
+
+	fmt.Println("\n\nAll data has been copied to clipboard!")
 }
 
 func unzip(path string, destDir string) error {

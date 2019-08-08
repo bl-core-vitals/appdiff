@@ -58,7 +58,11 @@ func main() {
 	for index, f := range files {
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondFileInfo, err = os.Stat(secondDirFileName)
-		var secondSize = secondFileInfo.Size()
+
+		var secondSize = int64(0)
+		if err == nil {
+			secondSize = secondFileInfo.Size()
+		}
 
 		var name = f.Name()
 		var firstSize = f.Size()

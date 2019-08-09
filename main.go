@@ -57,19 +57,14 @@ func main() {
 
 	for index, f := range files {
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
-		var secondFileInfo, err = os.Stat(secondDirFileName)
-
-		var secondSize = int64(0)
-		if err == nil {
-			secondSize = secondFileInfo.Size()
-		}
+		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
-		var firstSize = f.Size()
+		var firstSize = getSize(filepath.Join(firstDir, name))
 
 		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
 
-		if err != nil {
+		if secondSize == 0 {
 			fmt.Printf(NewFile, name)
 			continue
 		}
@@ -84,6 +79,22 @@ func main() {
 	}
 
 	copyToClipboard(allData)
+}
+
+func getSize(fileName string) int64 {
+	var fileInfo, err = os.Stat(fileName)
+	var size = int64(0)
+	if err == nil {
+		if fileInfo.IsDir() {
+			size, err := getDirSize(fileName)
+			if err == nil {
+				return size
+			}
+		} else {
+			size = fileInfo.Size()
+		}
+	}
+	return size
 }
 
 func copyToClipboard(allData []string) {
@@ -110,4 +121,18 @@ func unzip(path string, destDir string) error {
 		return err
 	}
 	return nil
+}
+
+func getDirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }

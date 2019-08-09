@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/atotto/clipboard"
-
 	"github.com/esafirm/appdiff/zipper"
 )
 
@@ -24,6 +25,7 @@ const (
 	Decrease = "\033[1;34m[<] %s : %d => %d\033[0m\n"
 	Same     = "\033[1;36m[=] %s : %d => %d\033[0m\n"
 )
+const extraPathForIpa = "/Payload/bl_ios.app"
 
 func main() {
 	if len(os.Args) == 1 {
@@ -37,18 +39,17 @@ func main() {
 	firstDir, _ := ioutil.TempDir("", "apk")
 	secondDir, _ := ioutil.TempDir("", "apk")
 
-	err := unzip(firstApk, firstDir)
-	err = unzip(secondApk, secondDir)
+	unzip(firstApk, firstDir)
+	unzip(secondApk, secondDir)
 
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	files := readDir(firstDir)
 
-	files, err := ioutil.ReadDir(firstDir)
-	if err != nil {
-		fmt.Println(err)
-		return
+	var isIpa = isIpaPackage(firstApk)
+	if isIpa {
+		tmpFirstApp := filepath.Join(firstDir, extraPathForIpa)
+		files = readDir(tmpFirstApp)
+
+		secondDir = secondDir + extraPathForIpa
 	}
 
 	allData := make([]string, len(files))
@@ -57,18 +58,19 @@ func main() {
 
 	for index, f := range files {
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
-		var secondFileInfo, err = os.Stat(secondDirFileName)
-		var secondSize = secondFileInfo.Size()
+		var secondFileInfo = dirToFileInfo(secondDirFileName)
+
+		secondSize := int64(0)
+		if secondFileInfo == nil {
+			// file is new, leave it appear on record.
+		} else {
+			secondSize = secondFileInfo.Size()
+		}
 
 		var name = f.Name()
 		var firstSize = f.Size()
 
 		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
-
-		if err != nil {
-			fmt.Printf(NewFile, name)
-			continue
-		}
 
 		if firstSize > secondSize {
 			fmt.Printf(Increase, name, firstSize, secondSize)
@@ -83,6 +85,9 @@ func main() {
 }
 
 func copyToClipboard(allData []string) {
+	// header columns
+	allData = append([]string{"Right version, Size, , Left version, , Size, Diff\n"}, allData...)
+
 	var buffer bytes.Buffer
 
 	for _, data := range allData {
@@ -94,16 +99,42 @@ func copyToClipboard(allData []string) {
 	fmt.Println("\n\nAll data has been copied to clipboard!")
 }
 
-func unzip(path string, destDir string) error {
+func unzip(path string, destDir string) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
 
 	_, err = zipper.Unzip(absPath, destDir)
+
 	if err != nil {
-		fmt.Println(err)
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
-	return nil
+}
+
+func isIpaPackage(filename string) bool {
+	return strings.Contains(filename, ".ipa")
+}
+
+func readDir(dir string) []os.FileInfo {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
+	}
+	return files
+}
+
+func dirToFileInfo(dir string) os.FileInfo {
+	fileinfo, err := os.Stat(dir)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return fileinfo
 }

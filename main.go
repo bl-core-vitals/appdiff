@@ -33,18 +33,18 @@ var whitelistFolder = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("usage: apkdiff <new_apk> <old_apk>")
+		fmt.Println("usage: appdiff <new_app> <old_app>")
 		return
 	}
 
-	firstApk := os.Args[1]
-	secondApk := os.Args[2]
+	newFile := os.Args[1]
+	oldFile := os.Args[2]
 
-	newDir, _ := ioutil.TempDir("", "apk")
-	oldDir, _ := ioutil.TempDir("", "apk")
+	newDir, _ := ioutil.TempDir("", "app")
+	oldDir, _ := ioutil.TempDir("", "app")
 
-	unzip(firstApk, newDir)
-	unzip(secondApk, oldDir)
+	unzip(newFile, newDir)
+	unzip(oldFile, oldDir)
 
 	var isIpa = isIpaPackage(newDir)
 	if isIpa {
@@ -72,38 +72,38 @@ func main() {
 	copyToClipboard(append(firstLog, secondLog...))
 }
 
-func diffFilesToRecords(dir string, secondDir string) []string {
-	files := readDir(dir)
+func diffFilesToRecords(newDir string, oldDir string) []string {
+	files := readDir(newDir)
 
 	records := make([]string, len(files))
 
 	for _, f := range files {
 
-		var secondDirFileName = filepath.Join(secondDir, f.Name())
-		var secondSize = getSize(secondDirFileName)
+		var oldDirFileName = filepath.Join(oldDir, f.Name())
+		var oldSize = getSize(oldDirFileName)
 
 		var name = f.Name()
-		var firstSize = getSize(filepath.Join(dir, name))
+		var newSize = getSize(filepath.Join(newDir, name))
 
-		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, newSize, name, oldSize, newSize-oldSize)
 		records = append(records, output)
 
-		if secondSize == 0 {
+		if oldSize == 0 {
 			fmt.Printf(NewFile, name)
 			continue
 		}
 
-		if firstSize > secondSize {
-			fmt.Printf(Increase, name, firstSize, secondSize)
-		} else if firstSize < secondSize {
-			fmt.Printf(Decrease, name, firstSize, secondSize)
+		if newSize > oldSize {
+			fmt.Printf(Increase, name, newSize, oldSize)
+		} else if newSize < oldSize {
+			fmt.Printf(Decrease, name, newSize, oldSize)
 		} else {
-			fmt.Printf(Same, name, firstSize, secondSize)
+			fmt.Printf(Same, name, newSize, oldSize)
 		}
 
 		if f.IsDir() && contains(whitelistFolder, f.Name()) {
-			subPath := filepath.Join(dir, f.Name())
-			subSecondPath := filepath.Join(secondDir, f.Name())
+			subPath := filepath.Join(newDir, f.Name())
+			subSecondPath := filepath.Join(oldDir, f.Name())
 			subRecords := diffFilesToRecords(subPath, subSecondPath)
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)
@@ -113,8 +113,8 @@ func diffFilesToRecords(dir string, secondDir string) []string {
 	return records
 }
 
-func findRemovedFiles(newApkDir string, oldApkDir string) []string {
-	files, err := ioutil.ReadDir(oldApkDir)
+func findRemovedFiles(newDir string, oldDir string) []string {
+	files, err := ioutil.ReadDir(oldDir)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -125,7 +125,7 @@ func findRemovedFiles(newApkDir string, oldApkDir string) []string {
 	for _, f := range files {
 		size := f.Size()
 		name := f.Name()
-		fileInNewApk := filepath.Join(newApkDir, name)
+		fileInNewApk := filepath.Join(newDir, name)
 		isExist := isExists(fileInNewApk)
 
 		if !isExist {

@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/atotto/clipboard"
-
 	"github.com/esafirm/appdiff/zipper"
 )
 
@@ -24,6 +25,9 @@ const (
 	Decrease = "\033[1;34m[<] %s : %d => %d\033[0m\n"
 	Same     = "\033[1;36m[=] %s : %d => %d\033[0m\n"
 )
+const extraPathForIpa = "/Payload/bl_ios.app"
+
+var whitelistFolder = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
 
 func main() {
 	if len(os.Args) == 1 {
@@ -37,32 +41,39 @@ func main() {
 	firstDir, _ := ioutil.TempDir("", "apk")
 	secondDir, _ := ioutil.TempDir("", "apk")
 
-	err := unzip(firstApk, firstDir)
-	err = unzip(secondApk, secondDir)
+	unzip(firstApk, firstDir)
+	unzip(secondApk, secondDir)
 
-	if err != nil {
-		fmt.Println(err)
-		return
+	var isIpa = isIpaPackage(firstDir)
+	if isIpa {
+		firstDir = firstDir + extraPathForIpa
+		secondDir = secondDir + extraPathForIpa
 	}
 
-	files, err := ioutil.ReadDir(firstDir)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	allData := make([]string, len(files))
+	var allData []string
 
 	fmt.Println("Comparing files…")
 
-	for index, f := range files {
+	allData = diffFilesToRecords(firstDir, secondDir)
+
+	copyToClipboard(allData)
+}
+
+func diffFilesToRecords(dir string, secondDir string) []string {
+	files := readDir(dir)
+
+	records := make([]string, len(files))
+
+	for _, f := range files {
+
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
-		var firstSize = getSize(filepath.Join(firstDir, name))
+		var firstSize = getSize(filepath.Join(dir, name))
 
-		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		records = append(records, output)
 
 		if secondSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -76,9 +87,18 @@ func main() {
 		} else {
 			fmt.Printf(Same, name, firstSize, secondSize)
 		}
+
+		if f.IsDir() && contains(whitelistFolder, f.Name()) {
+			subPath := filepath.Join(dir, f.Name())
+			subSecondPath := filepath.Join(secondDir, f.Name())
+			subRecords := diffFilesToRecords(subPath, subSecondPath)
+			if len(subRecords) > 0 {
+				records = append(records, subRecords...)
+			}
+		}
 	}
 
-	copyToClipboard(allData)
+	return records
 }
 
 func getSize(fileName string) int64 {
@@ -98,6 +118,9 @@ func getSize(fileName string) int64 {
 }
 
 func copyToClipboard(allData []string) {
+	// header columns
+	allData = append([]string{"Right version, Size, , Left version, , Size, Diff\n"}, allData...)
+
 	var buffer bytes.Buffer
 
 	for _, data := range allData {
@@ -109,18 +132,21 @@ func copyToClipboard(allData []string) {
 	fmt.Println("\n\nAll data has been copied to clipboard!")
 }
 
-func unzip(path string, destDir string) error {
+func unzip(path string, destDir string) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
 
 	_, err = zipper.Unzip(absPath, destDir)
+
 	if err != nil {
-		fmt.Println(err)
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
-	return nil
 }
 
 func getDirSize(path string) (int64, error) {
@@ -135,4 +161,36 @@ func getDirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func isIpaPackage(filename string) bool {
+	return strings.Contains(filename, ".ipa")
+}
+
+func readDir(dir string) []os.FileInfo {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
+	}
+	return files
+}
+
+func dirToFileInfo(dir string) os.FileInfo {
+	fileinfo, err := os.Stat(dir)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return fileinfo
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if strings.Contains(a, e) {
+			return true
+		}
+	}
+	return false
 }

@@ -36,45 +36,56 @@ func main() {
 	firstApk := os.Args[1]
 	secondApk := os.Args[2]
 
-	firstDir, _ := ioutil.TempDir("", "apk")
-	secondDir, _ := ioutil.TempDir("", "apk")
+	newApkDir, _ := ioutil.TempDir("", "apk")
+	oldApkDir, _ := ioutil.TempDir("", "apk")
 
-	err := unzip(firstApk, firstDir)
-	err = unzip(secondApk, secondDir)
+	err := unzip(firstApk, newApkDir)
+	err = unzip(secondApk, oldApkDir)
 
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	fmt.Println("Comparing files…")
-
 	// Using goroutine
-	logs := make(chan string)
 	var wg sync.WaitGroup
 	wg.Add(2)
-	compareFiles(logs, &wg, secondDir, firstDir)
-	findRemovedFiles(logs, &wg, secondDir, firstDir)
+
+	var firstLog []string
+	var secondLog []string
+
+	go func() {
+		defer wg.Done()
+		firstLog = compareFiles(newApkDir, oldApkDir)
+	}()
+	go func() {
+		defer wg.Done()
+		secondLog = findRemovedFiles(newApkDir, oldApkDir)
+	}()
+
 	wg.Wait()
 
-	copyToClipboard(logs)
+	fmt.Println("Closing!")
+	copyToClipboard(append(firstLog, secondLog...))
 }
 
-func compareFiles(channel chan<- string, wg *sync.WaitGroup, newApkDir string, oldApkDir string) {
+func compareFiles(newApkDir string, oldApkDir string) []string {
 	files, err := ioutil.ReadDir(newApkDir)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	for _, f := range files {
+	allData := make([]string, len(files))
+
+	for index, f := range files {
 		var secondDirFileName = filepath.Join(oldApkDir, f.Name())
 		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
 		var firstSize = getSize(filepath.Join(newApkDir, name))
 
-		channel <- fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
 
 		if secondSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -89,27 +100,32 @@ func compareFiles(channel chan<- string, wg *sync.WaitGroup, newApkDir string, o
 			fmt.Printf(Same, name, firstSize, secondSize)
 		}
 	}
+
+	return allData
 }
 
-func findRemovedFiles(channel chan<- string, wg *sync.WaitGroup, newApkDir string, oldApkDir string) {
+func findRemovedFiles(newApkDir string, oldApkDir string) []string {
 	files, err := ioutil.ReadDir(oldApkDir)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
+	removedFiles := make([]string, 0)
+
 	for _, f := range files {
+		size := f.Size()
 		name := f.Name()
 		fileInNewApk := filepath.Join(newApkDir, name)
 		isExist := isExists(fileInNewApk)
 
 		if !isExist {
 			fmt.Printf(RemovedFile, name)
-			channel <- fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, 0, name, f.Size(), f.Size())
+			removedFiles = append(removedFiles, fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, 0, name, size, size))
 		}
 	}
 
-	wg.Done()
+	return removedFiles
 }
 
 func isExists(name string) bool {
@@ -137,10 +153,10 @@ func getSize(fileName string) int64 {
 	return size
 }
 
-func copyToClipboard(allData <-chan string) {
+func copyToClipboard(allData []string) {
 	var buffer bytes.Buffer
 
-	for data := range allData {
+	for _, data := range allData {
 		buffer.WriteString(data)
 	}
 

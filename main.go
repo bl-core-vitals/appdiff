@@ -73,20 +73,18 @@ func main() {
 }
 
 func diffFilesToRecords(newDir string, oldDir string) []string {
-	files := readDir(newDir)
 
+	files := readDir(newDir)
 	records := make([]string, len(files))
 
 	for _, f := range files {
 
-		var oldDirFileName = filepath.Join(oldDir, f.Name())
-		var oldSize = getSize(oldDirFileName)
-
 		var name = f.Name()
+		var oldDirFileName = filepath.Join(oldDir, name)
+		var oldSize = getSize(oldDirFileName)
 		var newSize = getSize(filepath.Join(newDir, name))
 
-		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, newSize, name, oldSize, newSize-oldSize)
-		records = append(records, output)
+		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, newSize, name, oldSize, newSize-oldSize))
 
 		if oldSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -94,16 +92,17 @@ func diffFilesToRecords(newDir string, oldDir string) []string {
 		}
 
 		if newSize > oldSize {
-			fmt.Printf(Increase, name, newSize, oldSize)
+			fmt.Printf(Increase, name, oldSize, newSize)
 		} else if newSize < oldSize {
-			fmt.Printf(Decrease, name, newSize, oldSize)
+			fmt.Printf(Decrease, name, oldSize, newSize)
 		} else {
 			fmt.Printf(Same, name, newSize, oldSize)
 		}
 
-		if f.IsDir() && contains(whitelistFolder, f.Name()) {
-			subPath := filepath.Join(newDir, f.Name())
-			subSecondPath := filepath.Join(oldDir, f.Name())
+		// Handling IPA files
+		if f.IsDir() && contains(whitelistFolder, name) {
+			subPath := filepath.Join(newDir, name)
+			subSecondPath := filepath.Join(oldDir, name)
 			subRecords := diffFilesToRecords(subPath, subSecondPath)
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)

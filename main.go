@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/atotto/clipboard"
-
 	"github.com/esafirm/appdiff/zipper"
 )
 
@@ -26,6 +27,9 @@ const (
 	Decrease    = "\033[1;34m[<] %s : %d => %d\033[0m\n"
 	Same        = "\033[1;36m[=] %s : %d => %d\033[0m\n"
 )
+const extraPathForIpa = "/Payload/bl_ios.app"
+
+var whitelistFolder = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
 
 func main() {
 	if len(os.Args) == 1 {
@@ -36,15 +40,16 @@ func main() {
 	firstApk := os.Args[1]
 	secondApk := os.Args[2]
 
-	newApkDir, _ := ioutil.TempDir("", "apk")
-	oldApkDir, _ := ioutil.TempDir("", "apk")
+	newDir, _ := ioutil.TempDir("", "apk")
+	oldDir, _ := ioutil.TempDir("", "apk")
 
-	err := unzip(firstApk, newApkDir)
-	err = unzip(secondApk, oldApkDir)
+	unzip(firstApk, newDir)
+	unzip(secondApk, oldDir)
 
-	if err != nil {
-		fmt.Println(err)
-		return
+	var isIpa = isIpaPackage(newDir)
+	if isIpa {
+		newDir = newDir + extraPathForIpa
+		oldDir = oldDir + extraPathForIpa
 	}
 
 	// Using goroutine
@@ -56,36 +61,32 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		firstLog = compareFiles(newApkDir, oldApkDir)
+		firstLog = diffFilesToRecords(newDir, oldDir)
 	}()
 	go func() {
 		defer wg.Done()
-		secondLog = findRemovedFiles(newApkDir, oldApkDir)
+		secondLog = findRemovedFiles(newDir, oldDir)
 	}()
-
 	wg.Wait()
 
-	fmt.Println("Closing!")
 	copyToClipboard(append(firstLog, secondLog...))
 }
 
-func compareFiles(newApkDir string, oldApkDir string) []string {
-	files, err := ioutil.ReadDir(newApkDir)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+func diffFilesToRecords(dir string, secondDir string) []string {
+	files := readDir(dir)
 
-	allData := make([]string, len(files))
+	records := make([]string, len(files))
 
-	for index, f := range files {
-		var secondDirFileName = filepath.Join(oldApkDir, f.Name())
+	for _, f := range files {
+
+		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
-		var firstSize = getSize(filepath.Join(newApkDir, name))
+		var firstSize = getSize(filepath.Join(dir, name))
 
-		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		records = append(records, output)
 
 		if secondSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -99,9 +100,17 @@ func compareFiles(newApkDir string, oldApkDir string) []string {
 		} else {
 			fmt.Printf(Same, name, firstSize, secondSize)
 		}
-	}
 
-	return allData
+		if f.IsDir() && contains(whitelistFolder, f.Name()) {
+			subPath := filepath.Join(dir, f.Name())
+			subSecondPath := filepath.Join(secondDir, f.Name())
+			subRecords := diffFilesToRecords(subPath, subSecondPath)
+			if len(subRecords) > 0 {
+				records = append(records, subRecords...)
+			}
+		}
+	}
+	return records
 }
 
 func findRemovedFiles(newApkDir string, oldApkDir string) []string {
@@ -154,6 +163,9 @@ func getSize(fileName string) int64 {
 }
 
 func copyToClipboard(allData []string) {
+	// header columns
+	allData = append([]string{"Right version, Size, , Left version, , Size, Diff\n"}, allData...)
+
 	var buffer bytes.Buffer
 
 	for _, data := range allData {
@@ -165,18 +177,21 @@ func copyToClipboard(allData []string) {
 	fmt.Println("\n\nAll data has been copied to clipboard!")
 }
 
-func unzip(path string, destDir string) error {
+func unzip(path string, destDir string) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
 
 	_, err = zipper.Unzip(absPath, destDir)
+
 	if err != nil {
-		fmt.Println(err)
-		return err
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
 	}
-	return nil
 }
 
 func getDirSize(path string) (int64, error) {
@@ -191,4 +206,36 @@ func getDirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
+}
+
+func isIpaPackage(filename string) bool {
+	return strings.Contains(filename, ".ipa")
+}
+
+func readDir(dir string) []os.FileInfo {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Println(err)
+		os.Exit(0)
+	}
+	return files
+}
+
+func dirToFileInfo(dir string) os.FileInfo {
+	fileinfo, err := os.Stat(dir)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return fileinfo
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if strings.Contains(a, e) {
+			return true
+		}
+	}
+	return false
 }

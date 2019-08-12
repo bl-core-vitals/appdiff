@@ -70,7 +70,7 @@ func diffFilesToRecords(dir string, secondDir string) []string {
 		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
-		var firstSize = getSize(filepath.Join(firstDir, name))
+		var firstSize = getSize(filepath.Join(dir, name))
 
 		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
 		records = append(records, output)

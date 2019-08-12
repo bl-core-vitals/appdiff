@@ -69,6 +69,7 @@ func main() {
 	}()
 	wg.Wait()
 
+	// Copy result to clipboard
 	copyToClipboard(append(firstLog, secondLog...))
 }
 

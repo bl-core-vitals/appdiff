@@ -27,6 +27,8 @@ const (
 )
 const extraPathForIpa = "/Payload/bl_ios.app"
 
+var whitelistFolder = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
+
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Println("usage: apkdiff <new_apk> <old_apk>")
@@ -42,28 +44,36 @@ func main() {
 	unzip(firstApk, firstDir)
 	unzip(secondApk, secondDir)
 
-	files := readDir(firstDir)
-
-	var isIpa = isIpaPackage(firstApk)
+	var isIpa = isIpaPackage(firstDir)
 	if isIpa {
-		tmpFirstApp := filepath.Join(firstDir, extraPathForIpa)
-		files = readDir(tmpFirstApp)
-
+		firstDir = firstDir + extraPathForIpa
 		secondDir = secondDir + extraPathForIpa
 	}
 
-	allData := make([]string, len(files))
+	var allData []string
 
 	fmt.Println("Comparing files…")
 
-	for index, f := range files {
+	allData = diffFilesToRecords(firstDir, secondDir)
+
+	copyToClipboard(allData)
+}
+
+func diffFilesToRecords(dir string, secondDir string) []string {
+	files := readDir(dir)
+
+	records := make([]string, len(files))
+
+	for _, f := range files {
+
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondSize = getSize(secondDirFileName)
 
 		var name = f.Name()
 		var firstSize = getSize(filepath.Join(firstDir, name))
 
-		allData[index] = fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		output := fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, firstSize, name, secondSize, firstSize-secondSize)
+		records = append(records, output)
 
 		if secondSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -77,9 +87,18 @@ func main() {
 		} else {
 			fmt.Printf(Same, name, firstSize, secondSize)
 		}
+
+		if f.IsDir() && contains(whitelistFolder, f.Name()) {
+			subPath := filepath.Join(dir, f.Name())
+			subSecondPath := filepath.Join(secondDir, f.Name())
+			subRecords := diffFilesToRecords(subPath, subSecondPath)
+			if len(subRecords) > 0 {
+				records = append(records, subRecords...)
+			}
+		}
 	}
 
-	copyToClipboard(allData)
+	return records
 }
 
 func getSize(fileName string) int64 {
@@ -156,4 +175,22 @@ func readDir(dir string) []os.FileInfo {
 		os.Exit(0)
 	}
 	return files
+}
+
+func dirToFileInfo(dir string) os.FileInfo {
+	fileinfo, err := os.Stat(dir)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return fileinfo
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if strings.Contains(a, e) {
+			return true
+		}
+	}
+	return false
 }

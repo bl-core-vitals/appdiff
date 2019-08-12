@@ -59,14 +59,6 @@ func main() {
 	for index, f := range files {
 		var secondDirFileName = filepath.Join(secondDir, f.Name())
 		var secondSize = getSize(secondDirFileName)
-		var secondFileInfo = dirToFileInfo(secondDirFileName)
-
-		secondSize := int64(0)
-		if secondFileInfo == nil {
-			// file is new, leave it appear on record.
-		} else {
-			secondSize = secondFileInfo.Size()
-		}
 
 		var name = f.Name()
 		var firstSize = getSize(filepath.Join(firstDir, name))
@@ -164,13 +156,4 @@ func readDir(dir string) []os.FileInfo {
 		os.Exit(0)
 	}
 	return files
-}
-
-func dirToFileInfo(dir string) os.FileInfo {
-	fileinfo, err := os.Stat(dir)
-	if err != nil {
-		log.Println(err)
-		return nil
-	}
-	return fileinfo
 }

@@ -13,3 +13,6 @@
 
 # Artifact
 appdiff
+
+*.ipa
+*.apk

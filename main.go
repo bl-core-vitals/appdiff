@@ -164,7 +164,7 @@ func getSize(fileName string) int64 {
 
 func copyToClipboard(allData []string) {
 	// header columns
-	allData = append([]string{"Right version, Size, , Left version, , Size, Diff\n"}, allData...)
+	allData = append([]string{"Right version, Size, , Left version, Size, Diff\n"}, allData...)
 
 	var buffer bytes.Buffer
 
@@ -220,15 +220,6 @@ func readDir(dir string) []os.FileInfo {
 		os.Exit(0)
 	}
 	return files
-}
-
-func dirToFileInfo(dir string) os.FileInfo {
-	fileinfo, err := os.Stat(dir)
-	if err != nil {
-		log.Println(err)
-		return nil
-	}
-	return fileinfo
 }
 
 func contains(s []string, e string) bool {

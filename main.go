@@ -29,7 +29,8 @@ const (
 )
 const extraPathForIpa = "/Payload/bl_ios.app"
 
-var whitelistFolder = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
+var recursiveFolders = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
+var watchedFolders = []string{"Frameworks", "PlugIns"}
 
 func main() {
 	if len(os.Args) == 1 {
@@ -61,7 +62,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		firstLog = diffFilesToRecords(newDir, oldDir)
+		firstLog = diffFilesToRecords(newDir, oldDir, "")
 	}()
 	go func() {
 		defer wg.Done()
@@ -73,19 +74,24 @@ func main() {
 	copyToClipboard(append(firstLog, secondLog...))
 }
 
-func diffFilesToRecords(newDir string, oldDir string) []string {
+func diffFilesToRecords(newDir string, oldDir string, folderName string) []string {
 
 	files := readDir(newDir)
 	records := make([]string, len(files))
 
 	for _, f := range files {
 
-		var name = f.Name()
+		name := f.Name()
+		filename := name
+		if len(folderName) > 0 {
+			filename = folderName + "/" + filename
+		}
+
 		var oldDirFileName = filepath.Join(oldDir, name)
 		var oldSize = getSize(oldDirFileName)
 		var newSize = getSize(filepath.Join(newDir, name))
 
-		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", name, newSize, name, oldSize, newSize-oldSize))
+		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", filename, newSize, filename, oldSize, newSize-oldSize))
 
 		if oldSize == 0 {
 			fmt.Printf(NewFile, name)
@@ -100,11 +106,21 @@ func diffFilesToRecords(newDir string, oldDir string) []string {
 			fmt.Printf(Same, name, newSize, oldSize)
 		}
 
-		// Handling IPA files
-		if f.IsDir() && contains(whitelistFolder, name) {
+		// Handling package folder
+		if f.IsDir() && contains(recursiveFolders, name) {
+			// remove folder size
+			records = records[:len(records)-1]
+
+			// file path should be printed
+			path := ""
+			if contains(watchedFolders, name) {
+				path = name
+			}
+
 			subPath := filepath.Join(newDir, name)
 			subSecondPath := filepath.Join(oldDir, name)
-			subRecords := diffFilesToRecords(subPath, subSecondPath)
+			subRecords := diffFilesToRecords(subPath, subSecondPath, path)
+
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)
 			}

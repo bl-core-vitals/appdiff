@@ -1,5 +1,7 @@
 ## Appdiff
 
+[![Build Status](https://travis-ci.org/bl-core-vitals/appdiff.svg?branch=master)](https://travis-ci.org/bl-core-vitals/appdiff)
+
 A CLI tools to compare the difference between two APKs or IPAs.
 
 Useful to reduce manual effort to make a report size app when a new version was released.

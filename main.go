@@ -76,10 +76,16 @@ func main() {
 
 func diffFilesToRecords(newDir string, oldDir string, folderName string) []string {
 
-	files := readDir(newDir)
-	records := make([]string, len(files))
+	newFiles := readDir(newDir)
+	oldFiles := readDir(oldDir)
 
-	for _, f := range files {
+	records := make([]string, len(oldFiles))
+
+	var merged []os.FileInfo
+	merged = oldFiles
+	merged = merging(merged, newFiles)
+
+	for _, f := range unique(merged) {
 
 		name := f.Name()
 		filename := name
@@ -245,4 +251,34 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func unique(intSlice []os.FileInfo) []os.FileInfo {
+	keys := make(map[os.FileInfo]bool)
+	list := []os.FileInfo{}
+	for _, entry := range intSlice {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
+}
+
+func appendIfMissing(slice []os.FileInfo, i os.FileInfo) []os.FileInfo {
+	for _, ele := range slice {
+		if ele == i {
+			return slice
+		}
+	}
+	return append(slice, i)
+}
+
+func merging(bucket []os.FileInfo, dir []os.FileInfo) []os.FileInfo {
+	var merged []os.FileInfo = bucket
+
+	for _, f := range dir {
+		appendIfMissing(bucket, f)
+	}
+	return merged
 }

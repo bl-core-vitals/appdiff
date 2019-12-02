@@ -99,15 +99,10 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string) []strin
 
 		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", filename, newSize, filename, oldSize, newSize-oldSize))
 
-		if oldSize == 0 {
-			fmt.Printf(NewFile, name)
-			continue
-		}
-
 		if newSize > oldSize {
-			fmt.Printf(Increase, name, oldSize, newSize)
+			fmt.Printf(Increase, name, newSize, oldSize)
 		} else if newSize < oldSize {
-			fmt.Printf(Decrease, name, oldSize, newSize)
+			fmt.Printf(Decrease, name, newSize, oldSize)
 		} else {
 			fmt.Printf(Same, name, newSize, oldSize)
 		}
@@ -274,11 +269,24 @@ func appendIfMissing(slice []os.FileInfo, i os.FileInfo) []os.FileInfo {
 	return append(slice, i)
 }
 
-func merging(bucket []os.FileInfo, dir []os.FileInfo) []os.FileInfo {
-	var merged []os.FileInfo = bucket
+func merging(olds []os.FileInfo, newest []os.FileInfo) []os.FileInfo {
+	oldsFilePaths := stringFileInfos(olds)
+	var mergedFileInfos []os.FileInfo = olds
 
-	for _, f := range dir {
-		appendIfMissing(bucket, f)
+	for _, fileInfo := range newest {
+		namePath := fileInfo.Name()
+		if !contains(oldsFilePaths, namePath) {
+			mergedFileInfos = append(mergedFileInfos, fileInfo)
+		}
 	}
-	return merged
+	return mergedFileInfos
+}
+
+func stringFileInfos(paths []os.FileInfo) []string {
+	filePaths := make([]string, 0)
+	for _, filepath := range paths {
+		namePath := filepath.Name()
+		filePaths = append(filePaths, namePath)
+	}
+	return filePaths
 }

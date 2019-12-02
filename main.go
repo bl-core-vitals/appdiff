@@ -269,13 +269,13 @@ func appendIfMissing(slice []os.FileInfo, i os.FileInfo) []os.FileInfo {
 	return append(slice, i)
 }
 
-func merging(olds []os.FileInfo, newest []os.FileInfo) []os.FileInfo {
-	oldsFilePaths := stringFileInfos(olds)
-	var mergedFileInfos []os.FileInfo = olds
+func merging(oldest []os.FileInfo, newest []os.FileInfo) []os.FileInfo {
+	oldFilePaths := stringFileInfos(oldest)
+	var mergedFileInfos []os.FileInfo = oldest
 
 	for _, fileInfo := range newest {
 		namePath := fileInfo.Name()
-		if !contains(oldsFilePaths, namePath) {
+		if !contains(oldFilePaths, namePath) {
 			mergedFileInfos = append(mergedFileInfos, fileInfo)
 		}
 	}

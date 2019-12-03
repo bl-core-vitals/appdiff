@@ -163,6 +163,9 @@ func trimLog(name string, folderName string) string {
 				}
 			}
 		}
+
+		path = strings.TrimSuffix(path, "/")
+
 		if len(path) > 0 {
 			filename = path
 		}

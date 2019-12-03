@@ -36,15 +36,18 @@ func main() {
 	newFile := os.Args[1]
 	oldFile := os.Args[2]
 
-	var levelFolder = int(0)
+	levelFolder := int(0)
 	if len(os.Args) > 3 {
 		level := os.Args[3]
 		i, _ := strconv.Atoi(level)
 		levelFolder = i
 	}
 
-	newDir, _ := ioutil.TempDir("", "app")
-	oldDir, _ := ioutil.TempDir("", "app")
+	isIpa := isIpaPackage(newFile)
+
+	// Create temp directory when unzip
+	newDir, _ := ioutil.TempDir("", "appdiff")
+	oldDir, _ := ioutil.TempDir("", "appdiff")
 
 	unzip(newFile, newDir)
 	unzip(oldFile, oldDir)
@@ -57,15 +60,19 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		logdiff = diffFilesToRecords(newDir, oldDir, "", levelFolder)
+		logdiff = diffFilesToRecords(newDir, oldDir, "", levelFolder, isIpa)
 	}()
 	wg.Wait()
+
+	// Remove temp directory when unzip
+	os.RemoveAll(newDir)
+	os.RemoveAll(oldDir)
 
 	// Copy result to clipboard
 	copyToClipboard(append(logdiff))
 }
 
-func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFolder int) []string {
+func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFolder int, isIpa bool) []string {
 
 	newFiles := readDir(newDir)
 	oldFiles := readDir(oldDir)
@@ -79,41 +86,50 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFo
 	for _, f := range merged {
 
 		name := f.Name()
-		filename := trimLog(name, folderName)
+		filename := name
+		if len(folderName) > 0 {
+			filename = folderName + "/" + filename
+		}
+
+		logFilename := trimLog(name, folderName)
 
 		var oldDirFileName = filepath.Join(oldDir, name)
 		var oldSize = getSize(oldDirFileName)
 		var newSize = getSize(filepath.Join(newDir, name))
 
-		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", filename, newSize, filename, oldSize, newSize-oldSize))
+		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", logFilename, newSize, logFilename, oldSize, newSize-oldSize))
 
-		if newSize > oldSize {
-			fmt.Printf(Increase, filename, newSize, oldSize)
-		} else if newSize < oldSize {
-			fmt.Printf(Decrease, filename, newSize, oldSize)
-		} else {
-			fmt.Printf(Same, filename, newSize, oldSize)
+		if shouldPrintLog(name, isIpa) {
+			if newSize > oldSize {
+				fmt.Printf(Increase, logFilename, newSize, oldSize)
+			} else if newSize < oldSize {
+				fmt.Printf(Decrease, logFilename, newSize, oldSize)
+			} else {
+				fmt.Printf(Same, logFilename, newSize, oldSize)
+			}
 		}
 
-		// check level folder
+		// Check level folder
 		if levelFolder > 0 {
 			splits := strings.Split(filename, "/")
-			if len(splits) >= levelFolder {
+			level := levelFolder
+			if isIpa {
+				level = level + 2
+			}
+
+			if len(splits) >= level {
 				continue
 			}
 		}
 
-		// is app folder (ios)
-		var isAppFolder = filepath.Ext(name) == ".app"
-
-		// Handling package folder
-		if f.IsDir() || isAppFolder {
-			// remove folder size
+		// Handling nested folder
+		if f.IsDir() {
+			// Remove folder size
 			records = records[:len(records)-1]
 
 			subPath := filepath.Join(newDir, name)
 			subSecondPath := filepath.Join(oldDir, name)
-			subRecords := diffFilesToRecords(subPath, subSecondPath, filename, levelFolder)
+			subRecords := diffFilesToRecords(subPath, subSecondPath, filename, levelFolder, isIpa)
 
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)
@@ -129,12 +145,12 @@ func trimLog(name string, folderName string) string {
 		filename = folderName + "/" + filename
 	}
 
-	// remove path 'Payload' (iOS)
+	// Remove path 'Payload' (iOS)
 	if strings.Contains(filename, "Payload/") {
 		filename = strings.Trim(filename, "Payload/")
 	}
 
-	// remove path 'x.app' (iOS)
+	// Remove path 'x.app' (iOS)
 	if strings.Contains(filename, ".app/") {
 		path := ""
 		splits := strings.Split(filename, "/")
@@ -153,6 +169,19 @@ func trimLog(name string, folderName string) string {
 	}
 
 	return filename
+}
+
+func shouldPrintLog(name string, isIpa bool) bool {
+	shouldPrint := true
+	if isIpa {
+		if strings.Contains(name, "Payload") || filepath.Ext(name) == ".app" {
+			shouldPrint = false
+		}
+	}
+	return shouldPrint
+}
+func isIpaPackage(filename string) bool {
+	return strings.Contains(filename, ".ipa")
 }
 
 func isExists(name string) bool {
@@ -181,7 +210,7 @@ func getSize(fileName string) int64 {
 }
 
 func copyToClipboard(allData []string) {
-	// header columns
+	// Header columns
 	allData = append([]string{"Right version, Size, , Left version, Size, Diff\n"}, allData...)
 
 	var buffer bytes.Buffer

@@ -27,9 +27,8 @@ const (
 	Decrease    = "\033[1;34m[<] %s : %d => %d\033[0m\n"
 	Same        = "\033[1;36m[=] %s : %d => %d\033[0m\n"
 )
-const extraPathForIpa = "/Payload/bl_ios.app"
 
-var recursiveFolders = []string{"Payload", "bl_ios.app", "Frameworks", "PlugIns"}
+var recursiveFolders = []string{"Payload", "Frameworks", "PlugIns"}
 var watchedFolders = []string{"Frameworks", "PlugIns"}
 
 func main() {
@@ -46,12 +45,6 @@ func main() {
 
 	unzip(newFile, newDir)
 	unzip(oldFile, oldDir)
-
-	var isIpa = isIpaPackage(newDir)
-	if isIpa {
-		newDir = newDir + extraPathForIpa
-		oldDir = oldDir + extraPathForIpa
-	}
 
 	// Using goroutine
 	var wg sync.WaitGroup
@@ -107,8 +100,11 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string) []strin
 			fmt.Printf(Same, name, newSize, oldSize)
 		}
 
+		// is app folder (ios)
+		var isAppFolder = filepath.Ext(name) == ".app"
+
 		// Handling package folder
-		if f.IsDir() && contains(recursiveFolders, name) {
+		if f.IsDir() && contains(recursiveFolders, name) || isAppFolder {
 			// remove folder size
 			records = records[:len(records)-1]
 
@@ -223,10 +219,6 @@ func getDirSize(path string) (int64, error) {
 		return err
 	})
 	return size, err
-}
-
-func isIpaPackage(filename string) bool {
-	return strings.Contains(filename, ".ipa")
 }
 
 func readDir(dir string) []os.FileInfo {

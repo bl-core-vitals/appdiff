@@ -36,11 +36,11 @@ func main() {
 	newFile := os.Args[1]
 	oldFile := os.Args[2]
 
-	var level = int(0)
+	var levelFolder = int(0)
 	if len(os.Args) > 3 {
-		rootLevel := os.Args[3]
-		i, _ := strconv.Atoi(rootLevel)
-		level = i
+		level := os.Args[3]
+		i, _ := strconv.Atoi(level)
+		levelFolder = i
 	}
 
 	newDir, _ := ioutil.TempDir("", "app")
@@ -57,7 +57,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		logdiff = diffFilesToRecords(newDir, oldDir, "", level)
+		logdiff = diffFilesToRecords(newDir, oldDir, "", levelFolder)
 	}()
 	wg.Wait()
 
@@ -65,7 +65,7 @@ func main() {
 	copyToClipboard(append(logdiff))
 }
 
-func diffFilesToRecords(newDir string, oldDir string, folderName string, level int) []string {
+func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFolder int) []string {
 
 	newFiles := readDir(newDir)
 	oldFiles := readDir(oldDir)
@@ -96,9 +96,9 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string, level i
 		}
 
 		// check level folder
-		if level > 0 {
+		if levelFolder > 0 {
 			splits := strings.Split(filename, "/")
-			if len(splits) >= level {
+			if len(splits) >= levelFolder {
 				continue
 			}
 		}
@@ -113,8 +113,7 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string, level i
 
 			subPath := filepath.Join(newDir, name)
 			subSecondPath := filepath.Join(oldDir, name)
-
-			subRecords := diffFilesToRecords(subPath, subSecondPath, filename, level)
+			subRecords := diffFilesToRecords(subPath, subSecondPath, filename, levelFolder)
 
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)

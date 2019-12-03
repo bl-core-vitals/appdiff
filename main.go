@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -21,24 +22,26 @@ const (
 	ErrorColor   = "\033[1;31m%s\033[0m"
 	DebugColor   = "\033[0;36m%s\033[0m"
 
-	NewFile     = "\033[1;33m[!] %s : New File!\033[0m\n"
-	RemovedFile = "\033[1;33m[!] %s : Removed File!\033[0m\n"
-	Increase    = "\033[1;33m[>] %s : %d => %d\033[0m\n"
-	Decrease    = "\033[1;34m[<] %s : %d => %d\033[0m\n"
-	Same        = "\033[1;36m[=] %s : %d => %d\033[0m\n"
+	Increase = "\033[1;33m[>] %s : %d => %d\033[0m\n"
+	Decrease = "\033[1;34m[<] %s : %d => %d\033[0m\n"
+	Same     = "\033[1;36m[=] %s : %d => %d\033[0m\n"
 )
-
-var recursiveFolders = []string{"Payload", "Frameworks", "PlugIns"}
-var watchedFolders = []string{"Frameworks", "PlugIns"}
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("usage: appdiff <new_app> <old_app>")
+		fmt.Println("usage: appdiff <new_app> <old_app> <level_folder>")
 		return
 	}
 
 	newFile := os.Args[1]
 	oldFile := os.Args[2]
+
+	var levelFolder = int(0)
+	if len(os.Args) > 3 {
+		level := os.Args[3]
+		i, _ := strconv.Atoi(level)
+		levelFolder = i
+	}
 
 	newDir, _ := ioutil.TempDir("", "app")
 	oldDir, _ := ioutil.TempDir("", "app")
@@ -48,26 +51,21 @@ func main() {
 
 	// Using goroutine
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(1)
 
-	var firstLog []string
-	var secondLog []string
+	var logdiff []string
 
 	go func() {
 		defer wg.Done()
-		firstLog = diffFilesToRecords(newDir, oldDir, "")
-	}()
-	go func() {
-		defer wg.Done()
-		secondLog = findRemovedFiles(newDir, oldDir)
+		logdiff = diffFilesToRecords(newDir, oldDir, "", levelFolder)
 	}()
 	wg.Wait()
 
 	// Copy result to clipboard
-	copyToClipboard(append(firstLog, secondLog...))
+	copyToClipboard(append(logdiff))
 }
 
-func diffFilesToRecords(newDir string, oldDir string, folderName string) []string {
+func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFolder int) []string {
 
 	newFiles := readDir(newDir)
 	oldFiles := readDir(oldDir)
@@ -78,13 +76,10 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string) []strin
 	merged = oldFiles
 	merged = merging(merged, newFiles)
 
-	for _, f := range unique(merged) {
+	for _, f := range merged {
 
 		name := f.Name()
-		filename := name
-		if len(folderName) > 0 {
-			filename = folderName + "/" + filename
-		}
+		filename := trimLog(name, folderName)
 
 		var oldDirFileName = filepath.Join(oldDir, name)
 		var oldSize = getSize(oldDirFileName)
@@ -93,30 +88,32 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string) []strin
 		records = append(records, fmt.Sprintf("%s, %d, , %s, %d, %d\n", filename, newSize, filename, oldSize, newSize-oldSize))
 
 		if newSize > oldSize {
-			fmt.Printf(Increase, name, newSize, oldSize)
+			fmt.Printf(Increase, filename, newSize, oldSize)
 		} else if newSize < oldSize {
-			fmt.Printf(Decrease, name, newSize, oldSize)
+			fmt.Printf(Decrease, filename, newSize, oldSize)
 		} else {
-			fmt.Printf(Same, name, newSize, oldSize)
+			fmt.Printf(Same, filename, newSize, oldSize)
+		}
+
+		// check level folder
+		if levelFolder > 0 {
+			splits := strings.Split(filename, "/")
+			if len(splits) >= levelFolder {
+				continue
+			}
 		}
 
 		// is app folder (ios)
 		var isAppFolder = filepath.Ext(name) == ".app"
 
 		// Handling package folder
-		if f.IsDir() && contains(recursiveFolders, name) || isAppFolder {
+		if f.IsDir() || isAppFolder {
 			// remove folder size
 			records = records[:len(records)-1]
 
-			// file path should be printed
-			path := ""
-			if contains(watchedFolders, name) {
-				path = name
-			}
-
 			subPath := filepath.Join(newDir, name)
 			subSecondPath := filepath.Join(oldDir, name)
-			subRecords := diffFilesToRecords(subPath, subSecondPath, path)
+			subRecords := diffFilesToRecords(subPath, subSecondPath, filename, levelFolder)
 
 			if len(subRecords) > 0 {
 				records = append(records, subRecords...)
@@ -126,28 +123,36 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string) []strin
 	return records
 }
 
-func findRemovedFiles(newDir string, oldDir string) []string {
-	files, err := ioutil.ReadDir(oldDir)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+func trimLog(name string, folderName string) string {
+	filename := name
+	if len(folderName) > 0 {
+		filename = folderName + "/" + filename
 	}
 
-	removedFiles := make([]string, 0)
+	// remove path 'Payload' (iOS)
+	if strings.Contains(filename, "Payload/") {
+		filename = strings.Trim(filename, "Payload/")
+	}
 
-	for _, f := range files {
-		size := f.Size()
-		name := f.Name()
-		fileInNewApk := filepath.Join(newDir, name)
-		isExist := isExists(fileInNewApk)
-
-		if !isExist {
-			fmt.Printf(RemovedFile, name)
-			removedFiles = append(removedFiles, fmt.Sprintf("%s, %d,, %s, %d, %d\n", name, 0, name, size, size))
+	// remove path 'x.app' (iOS)
+	if strings.Contains(filename, ".app/") {
+		path := ""
+		splits := strings.Split(filename, "/")
+		for _, f := range splits {
+			if !strings.Contains(f, ".app") {
+				if len(splits) == 2 {
+					path = path + f
+				} else {
+					path = path + f + "/"
+				}
+			}
+		}
+		if len(path) > 0 {
+			filename = path
 		}
 	}
 
-	return removedFiles
+	return filename
 }
 
 func isExists(name string) bool {
@@ -224,9 +229,8 @@ func getDirSize(path string) (int64, error) {
 func readDir(dir string) []os.FileInfo {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
-		log.Println(err)
-		os.Exit(0)
+		var empty []os.FileInfo
+		return empty
 	}
 	return files
 }
@@ -238,27 +242,6 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
-}
-
-func unique(intSlice []os.FileInfo) []os.FileInfo {
-	keys := make(map[os.FileInfo]bool)
-	list := []os.FileInfo{}
-	for _, entry := range intSlice {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
-}
-
-func appendIfMissing(slice []os.FileInfo, i os.FileInfo) []os.FileInfo {
-	for _, ele := range slice {
-		if ele == i {
-			return slice
-		}
-	}
-	return append(slice, i)
 }
 
 func merging(oldest []os.FileInfo, newest []os.FileInfo) []os.FileInfo {

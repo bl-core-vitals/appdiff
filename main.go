@@ -29,7 +29,7 @@ const (
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("usage: appdiff <new_app> <old_app>")
+		fmt.Println("usage: appdiff <new_app> <old_app> <level_folder>")
 		return
 	}
 
@@ -95,7 +95,7 @@ func diffFilesToRecords(newDir string, oldDir string, folderName string, level i
 			fmt.Printf(Same, filename, newSize, oldSize)
 		}
 
-		// check root level
+		// check level folder
 		if level > 0 {
 			splits := strings.Split(filename, "/")
 			if len(splits) >= level {

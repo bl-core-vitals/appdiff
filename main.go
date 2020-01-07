@@ -155,7 +155,7 @@ func trimLog(name string, folderName string) string {
 		path := ""
 		splits := strings.Split(filename, "/")
 		for _, f := range splits {
-			if !strings.Contains(f, ".app") {
+			if !strings.HasSuffix(f, ".app") {
 				if len(splits) == 2 {
 					path = path + f
 				} else {

@@ -25,6 +25,8 @@ const (
 	Increase = "\033[1;33m[>] %s : %d => %d\033[0m\n"
 	Decrease = "\033[1;34m[<] %s : %d => %d\033[0m\n"
 	Same     = "\033[1;36m[=] %s : %d => %d\033[0m\n"
+
+	OutputsDirName   = "outputs"
 )
 
 func main() {
@@ -68,8 +70,20 @@ func main() {
 	os.RemoveAll(newDir)
 	os.RemoveAll(oldDir)
 
+	appdiffDir := getwd()
+
 	// Copy result to clipboard
-	copyToClipboard(append(logdiff))
+	replacer := strings.NewReplacer(".ipa", "", ".apk", "")
+	newFileName := replacer.Replace(newFile)
+	oldFileName := replacer.Replace(oldFile)
+
+	copyToClipboard(newFileName, oldFileName, append(logdiff))
+	createFile(appdiffDir, newFileName, oldFileName, append(logdiff))
+}
+
+func getLastSlice(value string, separator string) string {
+	s := strings.Split(value, separator)
+	return s[len(s)-1]
 }
 
 func diffFilesToRecords(newDir string, oldDir string, folderName string, levelFolder int, isIpa bool) []string {
@@ -212,9 +226,9 @@ func getSize(fileName string) int64 {
 	return size
 }
 
-func copyToClipboard(allData []string) {
+func copyToClipboard(newFileName string, oldFileName string, allData []string) {
 	// Header columns
-	allData = append([]string{"Right version, Size, , Left version, Size, Diff\n"}, allData...)
+	allData = append([]string{newFileName, ", Size, , ", oldFileName, ", Size, Diff\n"}, allData...)
 
 	var buffer bytes.Buffer
 
@@ -225,6 +239,38 @@ func copyToClipboard(allData []string) {
 	clipboard.WriteAll(buffer.String())
 
 	fmt.Println("\n\nAll data has been copied to clipboard!")
+}
+
+func createFile(dir string, newFileName string, oldFileName string, allData []string) {
+	fileName := fmt.Sprintf("%s_%s_%s", getLastSlice(dir, "/"), newFileName, oldFileName)
+
+	chdir(dir)
+
+	os.RemoveAll(OutputsDirName)
+
+	errDir := os.Mkdir(OutputsDirName, 0755)
+	checkIfError(errDir)
+
+	chdir(OutputsDirName)
+
+	f, err := os.Create(fmt.Sprintf("%s.txt", fileName))
+	if err != nil {
+		fmt.Println(err)
+		f.Close()
+		return
+	}
+
+	allData = append([]string{newFileName, ", Size, , ", oldFileName, ", Size, Diff\n"}, allData...)
+
+	for _, v := range allData {
+		fmt.Fprint(f, v)
+	}
+	err = f.Close()
+	checkIfError(err)
+
+	path := getwd()
+
+	fmt.Printf("File %s.txt has been created at %s/%s.txt\n", fileName, path, fileName)
 }
 
 func unzip(path string, destDir string) {
@@ -296,4 +342,24 @@ func stringFileInfos(paths []os.FileInfo) []string {
 		filePaths = append(filePaths, namePath)
 	}
 	return filePaths
+}
+
+func chdir(dir string) {
+	err := os.Chdir(dir)
+	checkIfError(err)
+}
+
+func getwd() string {
+	path, err := os.Getwd()
+	checkIfError(err)
+	return path
+}
+
+func checkIfError(err error) {
+	if err == nil {
+		return
+	}
+
+	fmt.Printf("\x1b[31;1m%s\x1b[0m\n", fmt.Sprintf("error: %s", err))
+	os.Exit(-1)
 }

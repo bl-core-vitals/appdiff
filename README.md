@@ -26,6 +26,24 @@ $ _
 4. To be a pretty view, just go to `Data > Split text to columns` 
 5. Go ahead to sort by `diff` header or other columns
 
+## Maintaining
+
+if you want to update this repo don't forget to update binary too
+
+you can use this command to build binary
+
+```sh
+go build -o mac-appdiff # or
+make build
+```
+
+for cross-platform (build linux executable via mac)
+
+```sh
+GOARCH="amd64" GOOS="linux" go build -o linux-appdiff # or
+make build-linux
+```
+
 ## Todo
 - [ ] Diff by packages in Android
 - [ ] Beautiful report 

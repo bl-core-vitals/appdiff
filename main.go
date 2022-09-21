@@ -31,7 +31,7 @@ const (
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("usage: appdiff <new_app> <old_app> <level_folder>")
+		fmt.Println("usage: appdiff <new_app> <old_app> <dir_level> <custom_outputs_directory>")
 		return
 	}
 
@@ -43,6 +43,11 @@ func main() {
 		level := os.Args[3]
 		i, _ := strconv.Atoi(level)
 		levelFolder = i
+	}
+
+	outputsDirName := OutputsDirName
+	if len(os.Args) > 4 {
+		outputsDirName = os.Args[4]
 	}
 
 	isIpa := isIpaPackage(newFile)
@@ -78,7 +83,7 @@ func main() {
 	oldFileName := replacer.Replace(oldFile)
 
 	copyToClipboard(newFileName, oldFileName, append(logdiff))
-	createFile(appdiffDir, newFileName, oldFileName, append(logdiff))
+	createFile(appdiffDir, outputsDirName, newFileName, oldFileName, append(logdiff))
 }
 
 func getLastSlice(value string, separator string) string {
@@ -241,17 +246,17 @@ func copyToClipboard(newFileName string, oldFileName string, allData []string) {
 	fmt.Println("\n\nAll data has been copied to clipboard!")
 }
 
-func createFile(dir string, newFileName string, oldFileName string, allData []string) {
+func createFile(dir string, outputsDir string, newFileName string, oldFileName string, allData []string) {
 	fileName := fmt.Sprintf("%s_%s_%s", getLastSlice(dir, "/"), newFileName, oldFileName)
 
 	chdir(dir)
 
-	os.RemoveAll(OutputsDirName)
+	os.RemoveAll(outputsDir)
 
-	errDir := os.Mkdir(OutputsDirName, 0755)
+	errDir := os.Mkdir(outputsDir, 0755)
 	checkIfError(errDir)
 
-	chdir(OutputsDirName)
+	chdir(outputsDir)
 
 	f, err := os.Create(fmt.Sprintf("%s.txt", fileName))
 	if err != nil {

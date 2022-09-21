@@ -33,7 +33,7 @@ $ _
 
 if you want to update this repo don't forget to update binary too
 
-you can use this command to build binary
+you can use this command to build binary via mac
 
 ```sh
 go build -o mac-appdiff # or

@@ -29,9 +29,7 @@ $ _
 4. To be a pretty view, just go to `Data > Split text to columns` 
 5. Go ahead to sort by `diff` header or other columns
 
-## Maintaining
-
-if you want to update this repo don't forget to update binary too
+## Building the Executables
 
 you can use this command to build binary via mac
 

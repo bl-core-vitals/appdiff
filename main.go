@@ -31,7 +31,7 @@ const (
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("usage: appdiff <new_app> <old_app> <level_folder>")
+		fmt.Println("usage: appdiff <new_app> <old_app> <dir_level> <custom_outputs_directory>")
 		return
 	}
 

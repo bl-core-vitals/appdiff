@@ -18,8 +18,9 @@ jobs:
       - name: Build
         run: go build -o ./linux-appdiff -v
       
-      - name: list the files
-        run: ls
+      - name: Archive appdiff binary for linux
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-appdiff
+          path: linux-appdiff
 
-      - name: check for pwd
-        run: pwd

@@ -3,7 +3,7 @@ name: Go package
 on: [push]
 
 jobs:
-  build:
+  build-linux:
 
     runs-on: ubuntu-latest
     steps:
@@ -24,3 +24,23 @@ jobs:
           name: linux-appdiff
           path: linux-appdiff
 
+  build-macos:
+
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.1
+
+      - name: Build
+        run: go build -o ./macos-appdiff -v
+      
+      - name: Archive appdiff binary for macos
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-appdiff
+          path: macos-appdiff
